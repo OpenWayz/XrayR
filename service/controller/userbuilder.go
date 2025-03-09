@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/OpenWayz/xrayrcus/api"
+	"github.com/OpenWayz/XrayR/api"
 	"github.com/sagernet/sing-shadowsocks/shadowaead_2022"
 	C "github.com/sagernet/sing/common"
 	log "github.com/sirupsen/logrus"

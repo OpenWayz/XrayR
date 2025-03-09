@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/OpenWayz/xrayrcus/api"
+	"github.com/OpenWayz/XrayR/api"
 	"github.com/eko/gocache/lib/v4/cache"
 	"github.com/eko/gocache/lib/v4/marshaler"
 	"github.com/eko/gocache/lib/v4/store"

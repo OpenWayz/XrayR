@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/OpenWayz/xrayrcus/api"
+	"github.com/OpenWayz/XrayR/api"
 	"github.com/go-resty/resty/v2"
 	log "github.com/sirupsen/logrus"
 )

@@ -19,7 +19,7 @@ import (
 	"github.com/sagernet/sing-shadowsocks/shadowaead_2022"
 	C "github.com/sagernet/sing/common"
 
-	"github.com/OpenWayz/xrayrcus/api"
+	"github.com/OpenWayz/XrayR/api"
 )
 
 // APIClient create an api client to the panel.

@@ -6,10 +6,10 @@ import (
 	"os"
 	"sync"
 
-	"github.com/OpenWayz/xrayrcus/api/bunpanel"
-	"github.com/OpenWayz/xrayrcus/api/gov2panel"
-	"github.com/OpenWayz/xrayrcus/api/newV2board"
-	"github.com/OpenWayz/xrayrcus/app/mydispatcher"
+	"github.com/OpenWayz/XrayR/api/bunpanel"
+	"github.com/OpenWayz/XrayR/api/gov2panel"
+	"github.com/OpenWayz/XrayR/api/newV2board"
+	"github.com/OpenWayz/XrayR/app/mydispatcher"
 
 	"dario.cat/mergo"
 	"github.com/r3labs/diff/v2"
@@ -19,14 +19,14 @@ import (
 	"github.com/xtls/xray-core/core"
 	"github.com/xtls/xray-core/infra/conf"
 
-	"github.com/OpenWayz/xrayrcus/api"
-	"github.com/OpenWayz/xrayrcus/api/pmpanel"
-	"github.com/OpenWayz/xrayrcus/api/proxypanel"
-	"github.com/OpenWayz/xrayrcus/api/sspanel"
-	"github.com/OpenWayz/xrayrcus/api/v2raysocks"
-	_ "github.com/OpenWayz/xrayrcus/cmd/distro/all"
-	"github.com/OpenWayz/xrayrcus/service"
-	"github.com/OpenWayz/xrayrcus/service/controller"
+	"github.com/OpenWayz/XrayR/api"
+	"github.com/OpenWayz/XrayR/api/pmpanel"
+	"github.com/OpenWayz/XrayR/api/proxypanel"
+	"github.com/OpenWayz/XrayR/api/sspanel"
+	"github.com/OpenWayz/XrayR/api/v2raysocks"
+	_ "github.com/OpenWayz/XrayR/cmd/distro/all"
+	"github.com/OpenWayz/XrayR/service"
+	"github.com/OpenWayz/XrayR/service/controller"
 )
 
 // Panel Structure

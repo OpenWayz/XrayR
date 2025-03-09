@@ -1,4 +1,4 @@
-module github.com/OpenWayz/xrayrcus
+module github.com/OpenWayz/XrayR
 
 go 1.23.1
 

@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/OpenWayz/xrayrcus/cmd"
+	"github.com/OpenWayz/XrayR/cmd"
 	log "github.com/sirupsen/logrus"
 )
 

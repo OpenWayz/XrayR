@@ -3,8 +3,8 @@ package gov2panel_test
 import (
 	"testing"
 
-	"github.com/OpenWayz/xrayrcus/api"
-	"github.com/OpenWayz/xrayrcus/api/gov2panel"
+	"github.com/OpenWayz/XrayR/api"
+	"github.com/OpenWayz/XrayR/api/gov2panel"
 )
 
 func CreateClient() api.API {

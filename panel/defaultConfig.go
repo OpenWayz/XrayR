@@ -1,6 +1,6 @@
 package panel
 
-import "github.com/OpenWayz/xrayrcus/service/controller"
+import "github.com/OpenWayz/XrayR/service/controller"
 
 func getDefaultLogConfig() *LogConfig {
 	return &LogConfig{
