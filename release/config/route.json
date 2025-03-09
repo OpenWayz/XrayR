@@ -1,0 +1,39 @@
+{
+  "domainStrategy": "IPIfNonMatch",
+  "rules": [
+    {
+      "outboundTag": "block",
+      "ip": [
+        "geoip:private"
+      ]
+    },
+    {
+      "outboundTag": "block",
+      "protocol": [
+        "bittorrent"
+      ]
+    },
+    {
+      "domain": [
+        "geosite:google"
+      ],
+      "outboundTag": "IPv4_out"
+    },
+    {
+      "domain": [
+        "geosite:cn"
+      ],
+      "outboundTag": "warp"
+    },
+    {
+      "ip": [
+        "geoip:cn"
+      ],
+      "outboundTag": "warp"
+    },
+    {
+      "outboundTag": "IPv4_out",
+      "network": "udp,tcp"
+    }
+  ]
+}
