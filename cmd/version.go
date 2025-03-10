@@ -9,7 +9,7 @@ import (
 var (
 	version  = "0.9.5"
 	codename = "XrayR"
-	intro    = "A Xray backend that supports many panels0.9.5a"
+	intro    = "A Xray backend that supports many panels0.9.5b"
 )
 
 func init() {
