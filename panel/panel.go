@@ -6,8 +6,6 @@ import (
 	"os"
 	"sync"
 
-	"github.com/OpenWayz/XrayR/api/bunpanel"
-	"github.com/OpenWayz/XrayR/api/gov2panel"
 	"github.com/OpenWayz/XrayR/api/newV2board"
 	"github.com/OpenWayz/XrayR/app/mydispatcher"
 
@@ -20,10 +18,7 @@ import (
 	"github.com/xtls/xray-core/infra/conf"
 
 	"github.com/OpenWayz/XrayR/api"
-	"github.com/OpenWayz/XrayR/api/pmpanel"
-	"github.com/OpenWayz/XrayR/api/proxypanel"
 	"github.com/OpenWayz/XrayR/api/sspanel"
-	"github.com/OpenWayz/XrayR/api/v2raysocks"
 	_ "github.com/OpenWayz/XrayR/cmd/distro/all"
 	"github.com/OpenWayz/XrayR/service"
 	"github.com/OpenWayz/XrayR/service/controller"
@@ -180,16 +175,6 @@ func (p *Panel) Start() {
 			apiClient = sspanel.New(nodeConfig.ApiConfig)
 		case "NewV2board", "V2board":
 			apiClient = newV2board.New(nodeConfig.ApiConfig)
-		case "PMpanel":
-			apiClient = pmpanel.New(nodeConfig.ApiConfig)
-		case "Proxypanel":
-			apiClient = proxypanel.New(nodeConfig.ApiConfig)
-		case "V2RaySocks":
-			apiClient = v2raysocks.New(nodeConfig.ApiConfig)
-		case "GoV2Panel":
-			apiClient = gov2panel.New(nodeConfig.ApiConfig)
-		case "BunPanel":
-			apiClient = bunpanel.New(nodeConfig.ApiConfig)
 		default:
 			log.Panicf("Unsupport panel type: %s", nodeConfig.PanelType)
 		}
