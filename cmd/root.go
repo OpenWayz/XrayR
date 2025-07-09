@@ -67,6 +67,10 @@ func getConfig() *viper.Viper {
 	return config
 }
 
+// run reads the configuration file, starts the XrayR core, and sets up hot
+// reloading of the configuration. It blocks until an interrupt signal is
+// received, at which point it stops the XrayR core, performs a garbage
+// collection, and exits.
 func run() error {
 	showVersion()
 
