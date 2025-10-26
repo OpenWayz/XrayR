@@ -18,7 +18,6 @@ import (
 	"github.com/xtls/xray-core/infra/conf"
 
 	"github.com/OpenWayz/XrayR/api"
-	"github.com/OpenWayz/XrayR/api/sspanel"
 	_ "github.com/OpenWayz/XrayR/cmd/distro/all"
 	"github.com/OpenWayz/XrayR/service"
 	"github.com/OpenWayz/XrayR/service/controller"
@@ -171,8 +170,6 @@ func (p *Panel) Start() {
 	for _, nodeConfig := range p.panelConfig.NodesConfig {
 		var apiClient api.API
 		switch nodeConfig.PanelType {
-		case "SSpanel":
-			apiClient = sspanel.New(nodeConfig.ApiConfig)
 		case "NewV2board", "V2board":
 			apiClient = newV2board.New(nodeConfig.ApiConfig)
 		default:
