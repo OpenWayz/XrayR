@@ -484,6 +484,9 @@ func (d *DefaultDispatcher) routedDispatch(ctx context.Context, link *transport.
 				handler = h
 			} else {
 				errors.LogWarning(ctx, "non existing outTag: ", outTag)
+				common.Close(link.Writer)
+				common.Interrupt(link.Reader)
+				return // DO NOT CHANGE: the traffic shouldn't be processed by default outbound if the specified outbound tag doesn't exist (yet), e.g., VLESS Reverse Proxy
 			}
 		} else {
 			errors.LogInfo(ctx, "default route for ", destination)
@@ -491,7 +494,7 @@ func (d *DefaultDispatcher) routedDispatch(ctx context.Context, link *transport.
 	}
 
 	if handler == nil {
-		handler = d.ohm.GetHandler(inTag) // Default outbound handler tag should be as same as the inbound tag
+		handler = d.ohm.GetHandler(inTag) // Default outbound handler tag should be as same as the inbound tag，xrayR special logic
 	}
 
 	// If there is no outbound with tag as same as the inbound tag
@@ -501,9 +504,6 @@ func (d *DefaultDispatcher) routedDispatch(ctx context.Context, link *transport.
 
 	if handler == nil {
 		errors.LogInfo(ctx, "default outbound handler not exist")
-		common.Close(link.Writer)
-		common.Interrupt(link.Reader)
-		return
 	}
 
 	ob.Tag = handler.Tag()

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"regexp"
 	"strconv"
@@ -20,6 +21,7 @@ import (
 	"github.com/xtls/xray-core/infra/conf"
 
 	"github.com/OpenWayz/XrayR/api"
+	"github.com/vmihailenco/msgpack"
 )
 
 // APIClient create an api client to the panel.
@@ -36,7 +38,6 @@ type APIClient struct {
 	LocalRuleList []api.DetectRule
 	resp          atomic.Value
 	eTags         map[string]string
-	AliveMap      *AliveMap
 }
 
 // New create an api instance
@@ -85,7 +86,6 @@ func New(apiConfig *api.Config) *APIClient {
 		DeviceLimit:   apiConfig.DeviceLimit,
 		LocalRuleList: localRuleList,
 		eTags:         make(map[string]string),
-		AliveMap:      &AliveMap{},
 	}
 	return apiClient
 }
@@ -205,96 +205,97 @@ func (c *APIClient) GetNodeInfo() (nodeInfo *api.NodeInfo, err error) {
 
 // GetUserList will pull user form panel
 func (c *APIClient) GetUserList() (UserList *[]api.UserInfo, err error) {
-	var users []*user
-	path := "/api/v1/server/UniProxy/user"
+    const path = "/api/v1/server/UniProxy/user"
 
-	switch c.NodeType {
-	case "V2ray", "Trojan", "Shadowsocks", "Vmess", "Vless":
-		break
-	default:
-		return nil, fmt.Errorf("unsupported node type: %s", c.NodeType)
-	}
+    switch c.NodeType {
+    case "V2ray", "Trojan", "Shadowsocks", "Vmess", "Vless":
+    default:
+        return nil, fmt.Errorf("unsupported node type: %s", c.NodeType)
+    }
 
-	res, err := c.client.R().
-		SetHeader("If-None-Match", c.eTags["users"]).
-		ForceContentType("application/json").
-		Get(path)
+    res, err := c.client.R().
+        SetHeader("X-Response-Format", "msgpack").
+        SetHeader("If-None-Match", c.eTags["users"]).
+        SetDoNotParseResponse(true).
+        Get(path)
 
-	_, _ = c.GetUserAlive()
+    if err != nil {
+        return nil, fmt.Errorf("request failed: %v", err)
+    }
 
 	// Etag identifier for a specific version of a resource. StatusCode = 304 means no changed
-	if res.StatusCode() == 304 {
-		return nil, errors.New(api.UserNotModified)
-	}
+    if res.StatusCode() == 304 {
+        return nil, errors.New(api.UserNotModified)
+    }
+
 	// update etag
-	if res.Header().Get("Etag") != "" && res.Header().Get("Etag") != c.eTags["users"] {
-		c.eTags["users"] = res.Header().Get("Etag")
-	}
+    if etag := res.Header().Get("Etag"); etag != "" {
+        c.eTags["users"] = etag
+    }
 
-	usersResp, err := c.parseResponse(res, path, err)
-	if err != nil {
-		return nil, err
-	}
-	b, _ := usersResp.Get("users").Encode()
-	json.Unmarshal(b, &users)
-	if len(users) == 0 {
-		return nil, errors.New("users is null")
-	}
+    type userInfoMsgpack struct {
+        Id         int    `msgpack:"id" json:"id"`
+        Uuid       string `msgpack:"uuid" json:"uuid"`
+        SpeedLimit int    `msgpack:"speed_limit" json:"speed_limit"`
+    }
+    type responseData struct {
+        Users []userInfoMsgpack `msgpack:"users" json:"users"`
+    }
 
-	var deviceLimit int = 0
-	var userList []api.UserInfo
-	for _, user := range users {
-		u := api.UserInfo{
-			UID:  user.Id,
-			UUID: user.Uuid,
-		}
-		// Support 1.7.1 speed limit
-		if c.SpeedLimit > 0 {
-			u.SpeedLimit = uint64(c.SpeedLimit * 1000000 / 8)
-		} else {
-			u.SpeedLimit = uint64(user.SpeedLimit * 1000000 / 8)
-		}
-		//Prefer local config
-		if c.DeviceLimit > 0 {
-			deviceLimit = c.DeviceLimit
-		} else {
-			deviceLimit = user.DeviceLimit
-		}
+    defer res.RawResponse.Body.Close()
 
-		u.DeviceLimit = deviceLimit
-		u.Email = u.UUID + "@v2board.user"
-		if c.NodeType == "Shadowsocks" {
-			u.Passwd = u.UUID
-		}
+    var resp responseData
 
-		userList = append(userList, u)
-	}
+    contentType := res.Header().Get("Content-Type")
 
-	return &userList, nil
-}
+    if strings.Contains(contentType, "msgpack") {
+        decoder := msgpack.NewDecoder(res.RawResponse.Body)
+        if err := decoder.Decode(&resp); err != nil {
+            return nil, fmt.Errorf("msgpack decode error: %v", err)
+        }
+    } else {
+        // fallback json
+        bodyBytes, err := io.ReadAll(res.RawResponse.Body)
+        if err != nil {
+            return nil, fmt.Errorf("read body error: %v", err)
+        }
+        if err := json.Unmarshal(bodyBytes, &resp); err != nil {
+            return nil, fmt.Errorf("json decode error: %v", err)
+        }
+    }
 
-// GetUserAlive will fetch the alive_ip count for users
-func (c *APIClient) GetUserAlive() (map[int]int, error) {
-	const path = "/api/v1/server/UniProxy/alivelist"
-	r, err := c.client.R().
-		ForceContentType("application/json").
-		Get(path)
-	if err != nil || r.StatusCode() > 399 {
-		c.AliveMap.Alive = make(map[int]int)
-		return nil, nil
-	}
+    // Allow empty user list
+    if resp.Users == nil {
+        empty := make([]api.UserInfo, 0)
+        return &empty, nil
+    }
 
-	if r != nil {
-		defer r.RawResponse.Body.Close()
-	} else {
-		return nil, fmt.Errorf("received nil response")
-	}
-	c.AliveMap = &AliveMap{}
-	if err := json.Unmarshal(r.Body(), c.AliveMap); err != nil {
-		return nil, fmt.Errorf("unmarshal user alive list error: %s", err)
-	}
+    result := make([]api.UserInfo, 0, len(resp.Users))
+    for _, u := range resp.Users {
+        user := api.UserInfo{
+            UID:  u.Id,
+            UUID: u.Uuid,
+        }
 
-	return c.AliveMap.Alive, nil
+        if c.SpeedLimit > 0 {
+            user.SpeedLimit = uint64(c.SpeedLimit * 1000000 / 8)
+        } else {
+            user.SpeedLimit = uint64(u.SpeedLimit * 1000000 / 8)
+        }
+
+        if c.DeviceLimit > 0 {
+            user.DeviceLimit = c.DeviceLimit
+        }
+
+        user.Email = user.UUID + "@v2board.user"
+        if c.NodeType == "Shadowsocks" {
+            user.Passwd = user.UUID
+        }
+
+        result = append(result, user)
+    }
+
+    return &result, nil
 }
 
 // ReportUserTraffic reports the user traffic

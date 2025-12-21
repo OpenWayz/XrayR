@@ -10,7 +10,6 @@ import (
 	"github.com/xtls/xray-core/infra/conf"
 
 	_ "github.com/OpenWayz/XrayR/cmd/distro/all"
-	. "github.com/OpenWayz/XrayR/service/controller"
 )
 
 func TestController(t *testing.T) {
