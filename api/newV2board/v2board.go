@@ -267,6 +267,7 @@ func (c *APIClient) GetUserList() (UserList *[]api.UserInfo, err error) {
     // Allow empty user list
     if resp.Users == nil {
         empty := make([]api.UserInfo, 0)
+		log.Println("User list is empty")
         return &empty, nil
     }
 
