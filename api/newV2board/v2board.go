@@ -343,20 +343,6 @@ func (c *APIClient) ReportNodeStatus(nodeStatus *api.NodeStatus) (err error) {
 
 // ReportNodeOnlineUsers implements the API interface
 func (c *APIClient) ReportNodeOnlineUsers(onlineUserList *[]api.OnlineUser) error {
-	data := make(map[int][]string)
-	for _, onlineuser := range *onlineUserList {
-		// json structure: { UID1:["ip1","ip2"],UID2:["ip3","ip4"] }
-		data[onlineuser.UID] = append(data[onlineuser.UID], onlineuser.IP)
-	}
-
-	path := "/api/v1/server/UniProxy/alive"
-	res, err := c.client.R().SetBody(data).ForceContentType("application/json").Post(path)
-	_, err = c.parseResponse(res, path, err)
-	// 面板无对应接口时先不报错
-	if err != nil {
-		return nil
-	}
-
 	return nil
 }
 

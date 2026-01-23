@@ -587,25 +587,10 @@ func (c *Controller) userInfoMonitor() (err error) {
 	if onlineDevice, err := c.GetOnlineDevice(c.Tag); err != nil {
 		c.logger.Print(err)
 	} else if len(*onlineDevice) > 0 {
-		// Only report user has traffic > 100kb to allow ping test
-		var result []api.OnlineUser
-		var nocountUID = make(map[int]struct{})
-		for _, traffic := range userTraffic {
-			total := traffic.Upload + traffic.Download
-			if total < int64(c.config.DeviceOnlineMinTraffic*1000) {
-				nocountUID[traffic.UID] = struct{}{}
-			}
-		}
-		for _, online := range *onlineDevice {
-			if _, ok := nocountUID[online.UID]; !ok {
-				result = append(result, online)
-			}
-		}
-
-		if err = c.apiClient.ReportNodeOnlineUsers(&result); err != nil {
-			log.Print(err)
+		if err = c.apiClient.ReportNodeOnlineUsers(onlineDevice); err != nil {
+			c.logger.Print(err)
 		} else {
-			log.Printf("Total %d online users, %d Reported", len(*onlineDevice), len(result))
+			c.logger.Printf("Report %d online users", len(*onlineDevice))
 		}
 	}
 

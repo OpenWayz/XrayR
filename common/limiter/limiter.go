@@ -17,7 +17,7 @@ import (
 	redisStore "github.com/eko/gocache/store/redis/v4"
 	goCache "github.com/patrickmn/go-cache"
 	"github.com/redis/go-redis/v9"
-	log "github.com/sirupsen/logrus"
+	"github.com/xtls/xray-core/common/errors"
 	"golang.org/x/time/rate"
 )
 
@@ -37,8 +37,6 @@ type InboundInfo struct {
 		config         *GlobalDeviceLimitConfig
 		globalOnlineIP *marshaler.Marshaler
 	}
-	AliveList     map[int]int // Key: Uid, value: alive_ip
-	OldUserOnline *sync.Map   // Key: Ip, value: Uid
 }
 
 type Limiter struct {
@@ -57,7 +55,6 @@ func (l *Limiter) AddInboundLimiter(tag string, nodeSpeedLimit uint64, userList 
 		NodeSpeedLimit: nodeSpeedLimit,
 		BucketHub:      new(sync.Map),
 		UserOnlineIP:   new(sync.Map),
-		OldUserOnline:  new(sync.Map),
 	}
 
 	if globalLimit != nil && globalLimit.Enable {
@@ -150,7 +147,6 @@ func (l *Limiter) GetOnlineDevice(tag string) (*[]api.OnlineUser, error) {
 			ipMap.Range(func(key, value interface{}) bool {
 				uid := value.(int)
 				ip := key.(string)
-				inboundInfo.OldUserOnline.Store(ip, uid)
 				onlineUser = append(onlineUser, api.OnlineUser{UID: uid, IP: ip})
 				return true
 			})
@@ -164,7 +160,7 @@ func (l *Limiter) GetOnlineDevice(tag string) (*[]api.OnlineUser, error) {
 	return &onlineUser, nil
 }
 
-func (l *Limiter) GetUserBucket(tag string, email string, ip string, isSourceTCP bool) (limiter *rate.Limiter, SpeedLimit bool, Reject bool) {
+func (l *Limiter) GetUserBucket(tag string, email string, ip string) (limiter *rate.Limiter, SpeedLimit bool, Reject bool) {
 	if value, ok := l.InboundInfo.Load(tag); ok {
 		var (
 			userLimit        uint64 = 0
@@ -181,33 +177,22 @@ func (l *Limiter) GetUserBucket(tag string, email string, ip string, isSourceTCP
 			deviceLimit = u.DeviceLimit
 		}
 
-		// Local device limit, only for TCP connection
-		if isSourceTCP {
-			ipMap := new(sync.Map)
-			ipMap.Store(ip, uid)
-			aliveIp := inboundInfo.AliveList[uid]
-			// If any device is online
-			if v, ok := inboundInfo.UserOnlineIP.LoadOrStore(email, ipMap); ok {
-				ipMap := v.(*sync.Map)
-				// If this is a new ip
-				if _, ok := ipMap.LoadOrStore(ip, uid); !ok {
-					if deviceLimit > 0 {
-						if deviceLimit <= aliveIp {
-							ipMap.Delete(ip)
-							return nil, false, true
-						}
-					}
-				}
-			} else if v, ok := inboundInfo.OldUserOnline.Load(ip); ok {
-				if v.(int) == uid {
-					inboundInfo.OldUserOnline.Delete(ip)
-				}
-			} else {
-				if deviceLimit > 0 {
-					if deviceLimit <= aliveIp {
-						inboundInfo.UserOnlineIP.Delete(email)
-						return nil, false, true
-					}
+		// Local device limit
+		ipMap := new(sync.Map)
+		ipMap.Store(ip, uid)
+		// If any device is online
+		if v, ok := inboundInfo.UserOnlineIP.LoadOrStore(email, ipMap); ok {
+			ipMap := v.(*sync.Map)
+			// If this is a new ip
+			if _, ok := ipMap.LoadOrStore(ip, uid); !ok {
+				counter := 0
+				ipMap.Range(func(key, value interface{}) bool {
+					counter++
+					return true
+				})
+				if counter > deviceLimit && deviceLimit > 0 {
+					ipMap.Delete(ip)
+					return nil, false, true
 				}
 			}
 		}
@@ -233,7 +218,7 @@ func (l *Limiter) GetUserBucket(tag string, email string, ip string, isSourceTCP
 			return nil, false, false
 		}
 	} else {
-		log.Error("Get Inbound Limiter information failed")
+		errors.LogDebug(context.Background(), "Get Inbound Limiter information failed")
 		return nil, false, false
 	}
 }
@@ -253,7 +238,7 @@ func globalLimit(inboundInfo *InboundInfo, email string, uid int, ip string, dev
 			// If the email is a new device
 			go pushIP(inboundInfo, uniqueKey, &map[string]int{ip: uid})
 		} else {
-			log.Error("cache service", err)
+			errors.LogErrorInner(context.Background(), err, "cache service")
 		}
 		return false
 	}
@@ -279,7 +264,7 @@ func pushIP(inboundInfo *InboundInfo, uniqueKey string, ipMap *map[string]int) {
 	defer cancel()
 
 	if err := inboundInfo.GlobalLimit.globalOnlineIP.Set(ctx, uniqueKey, ipMap); err != nil {
-		log.Error("cache service", err)
+		errors.LogErrorInner(context.Background(), err, "cache service")
 	}
 }
 
