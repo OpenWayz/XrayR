@@ -105,6 +105,7 @@ type DefaultDispatcher struct {
 	stats       stats.Manager
 	fdns        dns.FakeDNSEngine
 	Limiter     *limiter.Limiter
+	ConnLimiter *OutboundConnLimiter    // 新增：限连接
 	RuleManager *rule.Manager
 }
 
@@ -130,6 +131,7 @@ func (d *DefaultDispatcher) Init(config *Config, om outbound.Manager, router rou
 	d.policy = pm
 	d.stats = sm
 	d.Limiter = limiter.New()
+	d.ConnLimiter = NewOutboundConnLimiter(500)
 	d.RuleManager = rule.New()
 	return nil
 }
@@ -280,6 +282,32 @@ func (d *DefaultDispatcher) Dispatch(ctx context.Context, destination net.Destin
 	if err != nil {
 		return nil, err
 	}
+	// ===== Outbound TCP 连接数限制（per user）=====
+	inboundSession := session.InboundFromContext(ctx)
+	if inboundSession != nil && inboundSession.User != nil {
+		user := inboundSession.User.Email
+
+		if destination.Network == net.Network_TCP {
+			if !d.ConnLimiter.Inc(user) {
+				errors.LogWarning(ctx,
+					"outbound tcp connection limit exceeded",
+					"user", user,
+					"limit", d.ConnLimiter.limit,
+				)
+				return nil, errors.New("outbound tcp connection limit exceeded")
+			}
+
+			// 在连接关闭时回收
+			origWriter := outbound.Writer
+			outbound.Writer = &closeHookWriter{
+				Writer: origWriter,
+				onClose: func() {
+					d.ConnLimiter.Dec(user)
+				},
+			}
+		}
+	}
+
 	if !sniffingRequest.Enabled {
 		go d.routedDispatch(ctx, outbound, destination)
 	} else {
@@ -514,4 +542,56 @@ func (d *DefaultDispatcher) routedDispatch(ctx context.Context, link *transport.
 	}
 
 	handler.Dispatch(ctx, link)
+}
+
+type OutboundConnLimiter struct {
+	mu     sync.Mutex
+	active map[string]int
+	limit  int
+}
+
+func NewOutboundConnLimiter(limit int) *OutboundConnLimiter {
+	return &OutboundConnLimiter{
+		active: make(map[string]int),
+		limit:  limit,
+	}
+}
+
+func (l *OutboundConnLimiter) Inc(user string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	l.active[user]++
+	if l.active[user] > l.limit {
+		l.active[user]--
+		return false
+	}
+	return true
+}
+
+func (l *OutboundConnLimiter) Dec(user string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	if l.active[user] > 0 {
+		l.active[user]--
+	}
+}
+
+type closeHookWriter struct {
+	buf.Writer
+	onClose func()
+	once    sync.Once
+}
+
+func (w *closeHookWriter) Close() error {
+	w.once.Do(func() {
+		if w.onClose != nil {
+			w.onClose()
+		}
+	})
+	if c, ok := w.Writer.(interface{ Close() error }); ok {
+		return c.Close()
+	}
+	return nil
 }
