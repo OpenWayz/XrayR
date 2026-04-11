@@ -213,6 +213,66 @@ func (d *DefaultDispatcher) getLink(ctx context.Context) (*transport.Link, *tran
 	return inboundLink, outboundLink, nil
 }
 
+// WrapLink 专为 REALITY 等直接传递 Link 的协议设计
+func (d *DefaultDispatcher) WrapLink(ctx context.Context, link *transport.Link) *transport.Link {
+	sessionInbound := session.InboundFromContext(ctx)
+	var user *protocol.MemoryUser
+	if sessionInbound != nil {
+		user = sessionInbound.User
+	}
+
+	// 1. 强制包裹一层超时 Reader (REALITY 必需)
+	link.Reader = &buf.TimeoutWrapperReader{Reader: link.Reader}
+
+	if user != nil && len(user.Email) > 0 {
+		// --- XrayR 特色功能：设备数限制 & 端口限速 ---
+		bucket, ok, reject := d.Limiter.GetUserBucket(sessionInbound.Tag, user.Email, sessionInbound.Source.Address.IP().String())
+		if reject {
+			errors.LogWarning(ctx, "Devices reach the limit in WrapLink: ", user.Email)
+			common.Close(link.Writer)
+			common.Interrupt(link.Reader)
+			return link
+		}
+		if ok {
+			link.Writer = d.Limiter.RateWriter(link.Writer, bucket)
+		}
+		// ------------------------------------------
+
+		p := d.policy.ForLevel(user.Level)
+		
+		// 2. XrayR 上行流量统计（挂载到 TimeoutWrapperReader 上，防丢包）
+		if p.Stats.UserUplink {
+			name := "user>>>" + user.Email + ">>>traffic>>>uplink"
+			if c, _ := stats.GetOrRegisterCounter(d.stats, name); c != nil {
+				link.Reader.(*buf.TimeoutWrapperReader).Counter = c
+			}
+		}
+		
+		// 3. XrayR 下行流量统计
+		if p.Stats.UserDownlink {
+			name := "user>>>" + user.Email + ">>>traffic>>>downlink"
+			if c, _ := stats.GetOrRegisterCounter(d.stats, name); c != nil {
+				// 注意这里的 SizeStatWriter 如果不在当前包，需要加上包名，如 dispatcher.SizeStatWriter
+				link.Writer = &dispatcher.SizeStatWriter{ 
+					Counter: c,
+					Writer:  link.Writer,
+				}
+			}
+		}
+		// 4. XrayR 在线人数统计
+		/*if p.Stats.UserOnline {
+			name := "user>>>" + user.Email + ">>>online"
+			if om, _ := stats.GetOrRegisterOnlineMap(d.stats, name); om != nil {
+				userIP := sessionInbound.Source.Address.String()
+				om.AddIP(userIP)
+				context.AfterFunc(ctx, func() { om.RemoveIP(userIP) })
+			}
+		}*/
+	}
+
+	return link
+}
+
 func (d *DefaultDispatcher) shouldOverride(ctx context.Context, result SniffResult, request session.SniffingRequest, destination net.Destination) bool {
 	domain := result.Domain()
 	if domain == "" {
@@ -362,15 +422,43 @@ func (d *DefaultDispatcher) DispatchLink(ctx context.Context, destination net.De
 		content = new(session.Content)
 		ctx = session.ContextWithContent(ctx, content)
 	}
+
+	// 关键修改 1：调用魔改版 WrapLink，应用超时控制和所有限流统计逻辑
+	outbound = d.WrapLink(ctx, outbound)
+
+	// 关键修改 2：补充 XrayR 特色的 TCP 连接数限制
+	inboundSession := session.InboundFromContext(ctx)
+	if inboundSession != nil && inboundSession.User != nil {
+		user := inboundSession.User.Email
+		if destination.Network == net.Network_TCP {
+			if !d.ConnLimiter.Inc(user) {
+				errors.LogWarning(ctx,
+					"outbound tcp connection limit exceeded in DispatchLink",
+					"user", user,
+					"limit", d.ConnLimiter.limit,
+				)
+				return errors.New("outbound tcp connection limit exceeded")
+			}
+			origWriter := outbound.Writer
+			outbound.Writer = &closeHookWriter{
+				Writer: origWriter,
+				onClose: func() {
+					d.ConnLimiter.Dec(user)
+				},
+			}
+		}
+	}
+
 	sniffingRequest := content.SniffingRequest
 	if !sniffingRequest.Enabled {
 		go d.routedDispatch(ctx, outbound, destination)
 	} else {
 		go func() {
 			cReader := &cachedReader{
-				reader: outbound.Reader.(buf.TimeoutReader),
+				reader: outbound.Reader.(buf.TimeoutReader), 
 			}
 			outbound.Reader = cReader
+			
 			result, err := sniffer(ctx, cReader, sniffingRequest.MetadataOnly, destination.Network)
 			if err == nil {
 				content.Protocol = result.Protocol()
