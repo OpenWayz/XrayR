@@ -219,6 +219,7 @@ func (d *DefaultDispatcher) WrapLink(ctx context.Context, link *transport.Link) 
 	var user *protocol.MemoryUser
 	if sessionInbound != nil {
 		user = sessionInbound.User
+		sessionInbound.CanSpliceCopy = 3
 	}
 
 	// 1. 强制包裹一层超时 Reader (REALITY 必需)

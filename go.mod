@@ -23,7 +23,7 @@ require (
 	github.com/spf13/viper v1.18.2
 	github.com/stretchr/testify v1.11.1
 	github.com/vmihailenco/msgpack v4.0.4+incompatible
-	github.com/xtls/xray-core v1.260123.0
+	github.com/xtls/xray-core v1.260327.0
 	golang.org/x/crypto v0.49.0
 	golang.org/x/net v0.52.0
 	golang.org/x/time v0.12.0
@@ -61,7 +61,7 @@ require (
 	github.com/aliyun/alibaba-cloud-sdk-go v1.62.695 // indirect
 	github.com/andybalholm/brotli v1.1.0 // indirect
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
-	github.com/apernet/quic-go v0.57.2-0.20260111184307-eec823306178 // indirect
+	github.com/apernet/quic-go v0.59.1-0.20260217092621-db4786c77a22 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.25.3 // indirect
 	github.com/aws/aws-sdk-go-v2/config v1.27.7 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.17.7 // indirect

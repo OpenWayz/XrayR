@@ -695,6 +695,8 @@ github.com/apapsch/go-jsonmerge/v2 v2.0.0 h1:axGnT1gRIfimI7gJifB699GoE/oq+F2MU7D
 github.com/apapsch/go-jsonmerge/v2 v2.0.0/go.mod h1:lvDnEdqiQrp0O42VQGgmlKpxL1AP2+08jFMw88y4klk=
 github.com/apernet/quic-go v0.57.2-0.20260111184307-eec823306178 h1:bSq8n+gX4oO/qnM3MKf4kroW75n+phO9Qp6nigJKZ1E=
 github.com/apernet/quic-go v0.57.2-0.20260111184307-eec823306178/go.mod h1:N1WIjPphkqs4efXWuyDNQ6OjjIK04vM3h+bEgwV+eVU=
+github.com/apernet/quic-go v0.59.1-0.20260217092621-db4786c77a22 h1:00ziBGnLWQEcR9LThDwvxOznJJquJ9bYUdmBFnawLMU=
+github.com/apernet/quic-go v0.59.1-0.20260217092621-db4786c77a22/go.mod h1:Npbg8qBtAZlsAB3FWmqwlVh5jtVG6a4DlYsOylUpvzA=
 github.com/armon/circbuf v0.0.0-20150827004946-bbbad097214e/go.mod h1:3U/XgcO3hCbHZ8TKRvWD2dDTCfh9M9ya+I9JpbB7O8o=
 github.com/armon/go-metrics v0.0.0-20180917152333-f0300d1749da/go.mod h1:Q73ZrmVTwzkszR9V5SSuryQ31EELlFMUz1kKyl939pY=
 github.com/armon/go-metrics v0.4.0/go.mod h1:E6amYzXo6aW1tqzoZGT755KkbgrJsSdpwZ+3JqfkOG4=
@@ -1664,6 +1666,12 @@ github.com/xtls/reality v0.0.0-20260322125925-9234c772ba8f h1:iy2JRioxmUpoJ3SzbF
 github.com/xtls/reality v0.0.0-20260322125925-9234c772ba8f/go.mod h1:DsJblcWDGt76+FVqBVwbwRhxyyNJsGV48gJLch0OOWI=
 github.com/xtls/xray-core v1.260123.0 h1:FCaIDJ1ThRaG9b8TpqNNq3hIcPTN+24vPWQY3s9lSXg=
 github.com/xtls/xray-core v1.260123.0/go.mod h1:xfHDVg861cIAR5WjwEVKHr/G/HMHSGSC9j3LZmt6sKM=
+github.com/xtls/xray-core v1.260123.1-0.20260131140233-20cf00c27159 h1:UB18zfjm57qCVhQw5jmOaGHJISJU6J8fdXkXXbq317g=
+github.com/xtls/xray-core v1.260123.1-0.20260131140233-20cf00c27159/go.mod h1:cxzYFZrxu1B1NtPjHsqv4UzgDvRA71mV4rXYH4KtO7Q=
+github.com/xtls/xray-core v1.260206.0 h1:gY8IV6u76CW93txL9QmacgZ0Udxr2Q3e9qUxXAhdHqI=
+github.com/xtls/xray-core v1.260206.0/go.mod h1:GyFIgVGRJkt3eyV/NMcdxOKXcJPqGGpyupHzy16uJhU=
+github.com/xtls/xray-core v1.260327.0 h1:g4TzxMwyPrxslZh6uD+FiG3lXKTrnNO+b4ky2OhogHE=
+github.com/xtls/xray-core v1.260327.0/go.mod h1:OXMlhBloFry8mw0KwWLWLd3RQyXJzEYsCGlgsX36h60=
 github.com/yalp/jsonpath v0.0.0-20180802001716-5cc68e5049a0 h1:6fRhSjgLCkTD3JnJxvaJ4Sj+TYblw757bqYgZaOq5ZY=
 github.com/yalp/jsonpath v0.0.0-20180802001716-5cc68e5049a0/go.mod h1:/LWChgwKmvncFJFHJ7Gvn9wZArjbV5/FppcK2fKk/tI=
 github.com/yandex-cloud/go-genproto v0.0.0-20240311082839-58e1a7554a75 h1:hkFRBcSOFUNuuORzA5DqvBcoFjH7R0HCIu+mlSSw56U=
