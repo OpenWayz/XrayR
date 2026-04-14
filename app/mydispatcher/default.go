@@ -339,35 +339,52 @@ func (d *DefaultDispatcher) Dispatch(ctx context.Context, destination net.Destin
 	}
 
 	sniffingRequest := content.SniffingRequest
-	inbound, outbound, err := d.getLink(ctx)
-	if err != nil {
-		return nil, err
-	}
-	// ===== Outbound TCP 连接数限制（per user）=====
-	inboundSession := session.InboundFromContext(ctx)
-	if inboundSession != nil && inboundSession.User != nil {
-		user := inboundSession.User.Email
+    // =========================================================
+    // 第一部分：前置拦截 (Fail Fast)，在分配高昂的 Link 资源前，提前判断并拦截超限用户
+    inboundSession := session.InboundFromContext(ctx)
+    var user string
+    if inboundSession != nil && inboundSession.User != nil {
+        user = inboundSession.User.Email
+    }
 
-		if destination.Network == net.Network_TCP {
-			if !d.ConnLimiter.Inc(user) {
-				errors.LogWarning(ctx,
-					"outbound tcp connection limit exceeded",
-					"user", user,
-					"limit", d.ConnLimiter.limit,
-				)
-				return nil, errors.New("outbound tcp connection limit exceeded")
-			}
+    if user != "" && destination.Network == net.Network_TCP {
+        if !d.ConnLimiter.Inc(user) {
+            errors.LogWarning(ctx,
+                "outbound tcp connection limit exceeded",
+                "user", user,
+                "limit", d.ConnLimiter.limit,
+            )
+            return nil, errors.New("outbound tcp connection limit exceeded")
+        }
+    }
 
-			// 在连接关闭时回收
-			origWriter := outbound.Writer
-			outbound.Writer = &closeHookWriter{
-				Writer: origWriter,
-				onClose: func() {
-					d.ConnLimiter.Dec(user)
-				},
-			}
-		}
-	}
+    // 获取底层传输管道 (耗费 CPU 和内存的操作)
+    inbound, outbound, err := d.getLink(ctx)
+    if err != nil {
+        if user != "" && destination.Network == net.Network_TCP {
+            d.ConnLimiter.Dec(user)
+        }
+        return nil, err
+    }
+    // 第二部分：注入回收钩子与 Context 秒级释放机制
+    if user != "" && destination.Network == net.Network_TCP {
+        origWriter := outbound.Writer
+        
+        // 实例化带有 sync.Once 的安全 Writer
+        hookWriter := &closeHookWriter{
+            Writer: origWriter,
+            onClose: func() {
+                d.ConnLimiter.Dec(user)
+            },
+        }
+        outbound.Writer = hookWriter
+
+        // 核心新增：Context 兜底回收，只要用户客户端断开连接（如切换节点），ctx 会立刻 Done，触发秒级回收
+        go func() {
+            <-ctx.Done()
+            hookWriter.runHook() // 即使底层 Writer 卡死，也能安全释放连接数
+        }()
+    }
 
 	if !sniffingRequest.Enabled {
 		go d.routedDispatch(ctx, outbound, destination)
@@ -655,12 +672,18 @@ func (l *OutboundConnLimiter) Inc(user string) bool {
 }
 
 func (l *OutboundConnLimiter) Dec(user string) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
+    l.mu.Lock()
+    defer l.mu.Unlock()
 
-	if l.active[user] > 0 {
-		l.active[user]--
-	}
+    if count, ok := l.active[user]; ok {
+        if count > 1 {
+            l.active[user]--
+        } else {
+            // 当计数即将归零时，直接从 map 中移除该用户
+            // 这样可以确保 map 的大小只与“当前活跃用户数”成正比
+            delete(l.active, user) 
+        }
+    }
 }
 
 type closeHookWriter struct {
@@ -669,19 +692,24 @@ type closeHookWriter struct {
 	once    sync.Once
 }
 
-func (w *closeHookWriter) Close() error {
-	w.once.Do(func() {
-		if w.onClose != nil {
-			w.onClose()
-		}
-	})
-	if c, ok := w.Writer.(interface{ Close() error }); ok {
-		return c.Close()
-	}
-	return nil
+// 封装一个线程安全的执行方法
+func (w *closeHookWriter) runHook() {
+    w.once.Do(func() {
+        if w.onClose != nil {
+            w.onClose()
+        }
+    })
 }
 
-// 确保你的 closeHookWriter 实现了 Interrupt 方法透传
+func (w *closeHookWriter) Close() error {
+    w.runHook() // 正常关闭时触发
+    if c, ok := w.Writer.(interface{ Close() error }); ok {
+        return c.Close()
+    }
+    return nil
+}
+
 func (w *closeHookWriter) Interrupt() {
-	common.Interrupt(w.Writer)
+    w.runHook() // 异常中断时触发
+    common.Interrupt(w.Writer)
 }
