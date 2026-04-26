@@ -192,6 +192,8 @@ func (c *APIClient) GetNodeInfo() (nodeInfo *api.NodeInfo, err error) {
 		nodeInfo, err = c.parseTrojanNodeResponse(server)
 	case "Shadowsocks":
 		nodeInfo, err = c.parseSSNodeResponse(server)
+	case "AnyTLS":
+		nodeInfo, err = c.parseAnytlsNodeResponse(server)
 	default:
 		return nil, fmt.Errorf("unsupported node type: %s", c.NodeType)
 	}
@@ -208,7 +210,7 @@ func (c *APIClient) GetUserList() (UserList *[]api.UserInfo, err error) {
     const path = "/api/v1/server/UniProxy/user"
 
     switch c.NodeType {
-    case "V2ray", "Trojan", "Shadowsocks", "Vmess", "Vless":
+    case "V2ray", "Trojan", "AnyTLS", "Shadowsocks", "Vmess", "Vless":
     default:
         return nil, fmt.Errorf("unsupported node type: %s", c.NodeType)
     }
@@ -396,6 +398,24 @@ func (c *APIClient) parseTrojanNodeResponse(s *serverConfig) (*api.NodeInfo, err
 		ServiceName:       s.NetworkSettings.ServiceName,
 		NameServerConfig:  s.parseDNSConfig(),
 	}
+	return nodeInfo, nil
+}
+
+func (c *APIClient) parseAnytlsNodeResponse(s *serverConfig) (*api.NodeInfo, error) {
+	transportProtocol := "tcp"
+
+	// Create GeneralNodeInfo
+	nodeInfo := &api.NodeInfo{
+		NodeType:          c.NodeType,
+		NodeID:            c.NodeID,
+		Port:              uint32(s.ServerPort),
+		TransportProtocol: transportProtocol,
+		EnableTLS:         true,
+		ServerNames:       []string{s.ServerName}, // 对应面板下发的 server_name (SNI)
+		PaddingScheme:     s.PaddingScheme,    	   // 对应面板下发的 padding_scheme
+		NameServerConfig:  s.parseDNSConfig(),     // XrayR 通用的 DNS 配置解析
+	}
+
 	return nodeInfo, nil
 }
 

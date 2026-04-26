@@ -95,6 +95,12 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 		} else {
 			proxySetting = &conf.TrojanServerConfig{}
 		}
+	case "AnyTLS":
+		protocol = "anytls"
+		// NodeInfo.PaddingScheme 是 string，而 conf.AnyTLSServerConfig 需要的是 []string (行列表)，
+		proxySetting = &conf.AnyTLSServerConfig{
+			PaddingScheme: []string{nodeInfo.PaddingScheme},
+		}
 	case "Shadowsocks", "Shadowsocks-Plugin":
 		protocol = "shadowsocks"
 		cipher := strings.ToLower(nodeInfo.CypherMethod)
@@ -119,7 +125,6 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 		}
 
 		proxySetting.NetworkList = &conf.NetworkList{"tcp", "udp"}
-
 	case "dokodemo-door":
 		protocol = "dokodemo-door"
 		proxySetting = struct {
@@ -130,7 +135,7 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 			NetworkList: []string{"tcp", "udp"},
 		}
 	default:
-		return nil, fmt.Errorf("unsupported node type: %s, Only support: V2ray, Trojan, Shadowsocks, and Shadowsocks-Plugin", nodeInfo.NodeType)
+		return nil, fmt.Errorf("unsupported node type: %s, Only support: V2ray, Trojan, Shadowsocks, AnyTLS,and Shadowsocks-Plugin", nodeInfo.NodeType)
 	}
 
 	setting, err := json.Marshal(proxySetting)

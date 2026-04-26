@@ -12,6 +12,7 @@ import (
 	"github.com/xtls/xray-core/common/protocol"
 	"github.com/xtls/xray-core/common/serial"
 	"github.com/xtls/xray-core/infra/conf"
+	"github.com/xtls/xray-core/proxy/anytls"
 	"github.com/xtls/xray-core/proxy/shadowsocks"
 	"github.com/xtls/xray-core/proxy/shadowsocks_2022"
 	"github.com/xtls/xray-core/proxy/trojan"
@@ -67,6 +68,22 @@ func (c *Controller) buildTrojanUser(userInfo *[]api.UserInfo) (users []*protoco
 			Level:   0,
 			Email:   c.buildUserTag(&user),
 			Account: serial.ToTypedMessage(trojanAccount),
+		}
+	}
+	return users
+}
+
+func (c *Controller) buildAnyTLSUser(userInfo *[]api.UserInfo) (users []*protocol.User) {
+	users = make([]*protocol.User, len(*userInfo))
+	for i, user := range *userInfo {
+        // 构建 AnyTLS 特有的 Account,AnyTLS 核心使用的是 Password 字段来验证
+		anyTlsAccount := &anytls.Account{
+			Password: user.UUID,
+		}
+		users[i] = &protocol.User{
+			Level:   0,
+			Email:   c.buildUserTag(&user),
+			Account: serial.ToTypedMessage(anyTlsAccount),
 		}
 	}
 	return users
