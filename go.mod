@@ -293,4 +293,4 @@ require (
 
 replace github.com/exoscale/egoscale => github.com/exoscale/egoscale v0.102.3
 
-replace github.com/xtls/xray-core => github.com/OpenWayz/xray-core v1.260327.1-0.20260425152012-0f6f93755f10
+replace github.com/xtls/xray-core => github.com/OpenWayz/xray-core v1.260327.1-0.20260427142750-aa5b35ef56d0

@@ -105,7 +105,6 @@ type DefaultDispatcher struct {
 	stats       stats.Manager
 	fdns        dns.FakeDNSEngine
 	Limiter     *limiter.Limiter
-	ConnLimiter *OutboundConnLimiter    // 新增：限连接
 	RuleManager *rule.Manager
 }
 
@@ -131,7 +130,6 @@ func (d *DefaultDispatcher) Init(config *Config, om outbound.Manager, router rou
 	d.policy = pm
 	d.stats = sm
 	d.Limiter = limiter.New()
-	d.ConnLimiter = NewOutboundConnLimiter(500)
 	d.RuleManager = rule.New()
 	return nil
 }
@@ -339,52 +337,11 @@ func (d *DefaultDispatcher) Dispatch(ctx context.Context, destination net.Destin
 	}
 
 	sniffingRequest := content.SniffingRequest
-    // =========================================================
-    // 第一部分：前置拦截 (Fail Fast)，在分配高昂的 Link 资源前，提前判断并拦截超限用户
-    inboundSession := session.InboundFromContext(ctx)
-    var user string
-    if inboundSession != nil && inboundSession.User != nil {
-        user = inboundSession.User.Email
-    }
-
-    if user != "" && destination.Network == net.Network_TCP {
-        if !d.ConnLimiter.Inc(user) {
-            errors.LogWarning(ctx,
-                "outbound tcp connection limit exceeded",
-                "user", user,
-                "limit", d.ConnLimiter.limit,
-            )
-            return nil, errors.New("outbound tcp connection limit exceeded")
-        }
-    }
-
-    // 获取底层传输管道 (耗费 CPU 和内存的操作)
-    inbound, outbound, err := d.getLink(ctx)
-    if err != nil {
-        if user != "" && destination.Network == net.Network_TCP {
-            d.ConnLimiter.Dec(user)
-        }
-        return nil, err
-    }
-    // 第二部分：注入回收钩子与 Context 秒级释放机制
-    if user != "" && destination.Network == net.Network_TCP {
-        origWriter := outbound.Writer
-        
-        // 实例化带有 sync.Once 的安全 Writer
-        hookWriter := &closeHookWriter{
-            Writer: origWriter,
-            onClose: func() {
-                d.ConnLimiter.Dec(user)
-            },
-        }
-        outbound.Writer = hookWriter
-
-        // 核心新增：Context 兜底回收，只要用户客户端断开连接（如切换节点），ctx 会立刻 Done，触发秒级回收
-        go func() {
-            <-ctx.Done()
-            hookWriter.runHook() // 即使底层 Writer 卡死，也能安全释放连接数
-        }()
-    }
+	
+	inbound, outbound, err := d.getLink(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	if !sniffingRequest.Enabled {
 		go d.routedDispatch(ctx, outbound, destination)
@@ -442,28 +399,6 @@ func (d *DefaultDispatcher) DispatchLink(ctx context.Context, destination net.De
 	}
 
 	outbound = d.WrapLink(ctx, outbound)
-
-	inboundSession := session.InboundFromContext(ctx)
-	if inboundSession != nil && inboundSession.User != nil {
-		user := inboundSession.User.Email
-		if destination.Network == net.Network_TCP {
-			if !d.ConnLimiter.Inc(user) {
-				errors.LogWarning(ctx,
-					"outbound tcp connection limit exceeded in DispatchLink",
-					"user", user,
-					"limit", d.ConnLimiter.limit,
-				)
-				return errors.New("outbound tcp connection limit exceeded")
-			}
-			origWriter := outbound.Writer
-			outbound.Writer = &closeHookWriter{
-				Writer: origWriter,
-				onClose: func() {
-					d.ConnLimiter.Dec(user)
-				},
-			}
-		}
-	}
 
 	sniffingRequest := content.SniffingRequest
 	if !sniffingRequest.Enabled {
@@ -625,6 +560,9 @@ func (d *DefaultDispatcher) routedDispatch(ctx context.Context, link *transport.
 
 	if handler == nil {
 		errors.LogInfo(ctx, "default outbound handler not exist")
+		common.Close(link.Writer)
+		common.Interrupt(link.Reader)
+		return
 	}
 
 	ob.Tag = handler.Tag()
@@ -644,72 +582,4 @@ func (d *DefaultDispatcher) routedDispatch(ctx context.Context, link *transport.
 	}
 
 	handler.Dispatch(ctx, link)
-}
-
-type OutboundConnLimiter struct {
-	mu     sync.Mutex
-	active map[string]int
-	limit  int
-}
-
-func NewOutboundConnLimiter(limit int) *OutboundConnLimiter {
-	return &OutboundConnLimiter{
-		active: make(map[string]int),
-		limit:  limit,
-	}
-}
-
-func (l *OutboundConnLimiter) Inc(user string) bool {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	l.active[user]++
-	if l.active[user] > l.limit {
-		l.active[user]--
-		return false
-	}
-	return true
-}
-
-func (l *OutboundConnLimiter) Dec(user string) {
-    l.mu.Lock()
-    defer l.mu.Unlock()
-
-    if count, ok := l.active[user]; ok {
-        if count > 1 {
-            l.active[user]--
-        } else {
-            // 当计数即将归零时，直接从 map 中移除该用户
-            // 这样可以确保 map 的大小只与“当前活跃用户数”成正比
-            delete(l.active, user) 
-        }
-    }
-}
-
-type closeHookWriter struct {
-	buf.Writer
-	onClose func()
-	once    sync.Once
-}
-
-// 封装一个线程安全的执行方法
-func (w *closeHookWriter) runHook() {
-    w.once.Do(func() {
-        if w.onClose != nil {
-            w.onClose()
-        }
-    })
-}
-
-func (w *closeHookWriter) Close() error {
-    w.runHook() // 正常关闭时触发
-    if c, ok := w.Writer.(interface{ Close() error }); ok {
-        return c.Close()
-    }
-    return nil
-}
-
-func (w *closeHookWriter) Interrupt() {
-    w.runHook() // 异常中断时触发
-    common.Interrupt(w.Writer)
 }
