@@ -2,6 +2,7 @@
 XrayR 
 
 go get github.com/xtls/xray-core@0a8470cb14ebbf7ee4cbb6c601bb9db072ace985
+
 go list -m -json github.com/OpenWayz/xray-core@0a8470cb14ebbf7ee4cbb6c601bb9db072ace985
 
 go mod tidy
